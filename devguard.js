@@ -1,233 +1,100 @@
-(function () {
-  'use strict';
+/*!
+  antidevtools.js
+  lightweight friendly warning with animated icon
+  put <script src="/static/js/antidevtools.js" nomodule></script> in head
+*/
+(function(){'use strict';
+var s=[
+'Dev tools detected\n\nPlease close dev tools and refresh to return to the homepage',
+'blocker-root','display:block;position:fixed;inset:0;background:linear-gradient(180deg,#06060a, #0f0f13);color:#ffd6e1;z-index:2147483647;display:flex;align-items:center;justify-content:center;padding:20px;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Arial,sans-serif;text-align:center;',
+'card','max-width:720px;background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02));padding:28px;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,0.6);backdrop-filter: blur(6px);',
+'title','font-size:22px;margin:0 0 10px 0;color:#fff;font-weight:600;',
+'msg','white-space:pre-line;font-size:15px;line-height:1.4;color:#ffd6e1;margin:0;',
+'btn','margin-top:18px;display:inline-flex;align-items:center;gap:10px;background:#ff3b6b;color:#fff;border:none;padding:10px 14px;border-radius:10px;font-weight:600;cursor:pointer;font-size:15px;',
+'spin','@keyframes adt-spin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}.adt-icon{width:64px;height:64px;display:inline-block;flex:0 0 64px}.adt-svg{width:64px;height:64px;animation:adt-spin 3s linear infinite}',
+'noSelect','html,body{user-select:none;-webkit-user-select:none;-moz-user-select:none;}',
+'refresh','Refresh page 🔄',
+'detectThreshold','160',
+'checkInterval','700'
+],P=function(i){return s[i];},warnShown=!1;
 
-  const CFG = {
-    checkIntervalMs: 700,
-    resizeThresholdPx: 160,
-    hideMessage: 'Security: access denied.',
-    hardRedirect: true,
-    tryCloseWindow: true,
-    blockTextSelection: true,
-    disableContextMenu: true,
-    maxConsoleOpenDurationMs: 200,
-    minRequestsBeforeDisable: 1, 
-    autoInit: true
-  };
+function q(e){try{return document.createElement(e);}catch(t){return null}}
+function injectCss(t){try{var e=q('style');if(!e)return; e.appendChild(document.createTextNode(t));(document.head||document.documentElement).appendChild(e)}catch(t){}}
 
-  const state = {
-    activeIntervals: [],
-    detected: false
-  };
+function buildUI(){
+  if(warnShown) return;
+  warnShown=!0;
+  try{console.clear()}catch(e){}
+  injectCss(P(7));
+  var root=q('div'); if(!root) return;
+  root.id=P(1);
+  root.setAttribute('style',P(2));
+  var card=q('div'); card.setAttribute('style',P(3));
+  // icon + content wrapper
+  var wrap=q('div'); wrap.setAttribute('style','display:flex;gap:18px;align-items:center;justify-content:center;flex-direction:row');
+  // icon
+  var iconWrap=q('div'); iconWrap.setAttribute('style','display:flex;align-items:center;justify-content:center;flex:0 0 auto');
+  iconWrap.className='adt-icon';
+  var svgNS='http://www.w3.org/2000/svg';
+  var svg=document.createElementNS(svgNS,'svg'); svg.setAttribute('viewBox','0 0 24 24'); svg.className='adt-svg';
+  svg.innerHTML = '<defs><linearGradient id=\"g1\" x1=\"0\" x2=\"1\"><stop offset=\"0\" stop-color=\"#ff6b95\"/><stop offset=\"1\" stop-color=\"#ff2d5e\"/></linearGradient></defs><path fill=\"url(#g1)\" d=\"M12 2c-4.97 0-9 3.58-9 9 0 5.43 4.82 9.91 9 11 4.18-1.09 9-5.57 9-11 0-5.42-4.03-9-9-9zm0 13.5a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z\"/>';
+  iconWrap.appendChild(svg);
+  // text block
+  var txtWrap=q('div'); txtWrap.setAttribute('style','display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:6px');
+  var t=q('h2'); t.setAttribute('style',P(5)); t.textContent='⚠️ Warning';
+  var p=q('p'); p.setAttribute('style',P(6)); p.textContent=P(0);
+  var btn=q('button'); btn.setAttribute('style',P(8)); btn.id='adt-refresh-btn'; btn.textContent=P(10);
+  btn.onclick=function(){ try{ location.reload(); }catch(e){} };
+  txtWrap.appendChild(t); txtWrap.appendChild(p); txtWrap.appendChild(btn);
+  wrap.appendChild(iconWrap); wrap.appendChild(txtWrap);
+  card.appendChild(wrap); root.appendChild(card);
+  (document.body||document.documentElement).appendChild(root);
+}
 
-  function safeTry(fn){ try { return fn(); } catch(e) { return undefined; } }
+function show(){ buildUI(); }
 
-  function triggerDefense(reason) {
-    if (state.detected) return;
-    state.detected = true;
+function detectByResize(){
+  try{
+    var ow=window.outerWidth|0, iw=window.innerWidth|0, oh=window.outerHeight|0, ih=window.innerHeight|0;
+    if(Math.abs(ow-iw)> (P(11)|0) || Math.abs(oh-ih)> (P(11)|0)) return !0;
+  }catch(e){}
+  return !1;
+}
 
-    state.activeIntervals.forEach(id => clearInterval(id));
-    window.removeEventListener('keydown', keyDownHandler, true);
-    if (CFG.disableContextMenu) window.removeEventListener('contextmenu', contextHandler, true);
+// console getter trick
+function detectByConsole(){
+  try{
+    var d=!1; var o={ toString:function(){ d=!0; return ''; } }; console.log(o);
+    return d;
+  }catch(e){}
+  return !1;
+}
 
-    safeTry(() => {
+function detectOnce(){
+  if(warnShown) return;
+  if(detectByResize()||detectByConsole()) show();
+}
 
-      document.documentElement.innerHTML = '';
-      document.write('');
-      document.close();
-    });
-
-    if (CFG.tryCloseWindow) {
-      safeTry(() => { window.open('','_self').close(); });
-    }
-
-    if (CFG.hardRedirect) {
-      safeTry(() => { location.replace('about:blank'); });
-      safeTry(() => { location.href = 'data:text/plain;base64,' + btoa(CFG.hideMessage + '\n\nDetected: ' + reason); });
-    }
-
-    safeTry(() => {
-      const el = document.createElement('div');
-      el.id = 'devguard-blocker';
-      el.style.position = 'fixed';
-      el.style.top = '0';
-      el.style.left = '0';
-      el.style.width = '100%';
-      el.style.height = '100%';
-      el.style.zIndex = '2147483647';
-      el.style.background = '#0b0b0b';
-      el.style.color = '#fff';
-      el.style.display = 'flex';
-      el.style.alignItems = 'center';
-      el.style.justifyContent = 'center';
-      el.style.fontFamily = 'system-ui, Arial, sans-serif';
-      el.style.fontSize = '18px';
-      el.style.textAlign = 'center';
-      el.textContent = CFG.hideMessage;
-      document.body && document.body.appendChild(el);
-    });
-
-    safeTry(() => {
-      document.querySelectorAll('audio,video').forEach(m => { try{ m.pause(); m.src=''; }catch(e){} });
-    });
-
-  }
-
-  function keyDownHandler(e) {
-    if (!e) return;
-    const k = e.key || e.keyIdentifier || '';
-    const blocked =
-      k === 'F12' ||
-      (e.ctrlKey && e.shiftKey && /^(I|J|C|K)$/i.test(k)) ||
-      (e.ctrlKey && /^u$/i.test(k)) ||
-      (e.ctrlKey && /^s$/i.test(k)) ||
-      (e.metaKey && e.altKey && /^i$/i.test(k)) ||
-      k === 'ContextMenu';
-    if (blocked) {
-      e.preventDefault();
-      e.stopImmediatePropagation && e.stopImmediatePropagation();
-      triggerDefense('blocked-shortcut:' + k);
-      return false;
-    }
-
-    if (k === 'PrintScreen') { try { alert('Zrzuty ekranu są niedozwolone.'); } catch(e){} }
-  }
-
-  function contextHandler(e) {
-    if (CFG.disableContextMenu) {
-      e.preventDefault();
-      e.stopImmediatePropagation && e.stopImmediatePropagation();
-      return false;
-    }
-  }
-
-  const detectors = [];
-
-  detectors.push(function detectByResize() {
-    try {
-      const dx = Math.abs(window.outerWidth - window.innerWidth);
-      const dy = Math.abs(window.outerHeight - window.innerHeight);
-      if (dx > CFG.resizeThresholdPx || dy > CFG.resizeThresholdPx) {
-        return {detected:true, reason:'resize-diff:'+dx+','+dy};
-      }
-    } catch(e){}
-    return {detected:false};
-  });
-
-  detectors.push(function detectByConsoleGetter() {
-    try {
-      let detected = false;
-      const start = performance.now();
-
-      const re = /./;
-      re.toString = function () {
-        detected = true;
-        return '';
-      };
-
-      console.log(re);
-      const dur = performance.now() - start;
-      if (detected || dur > CFG.maxConsoleOpenDurationMs) {
-        return {detected:true, reason:'console-getter: timed:'+Math.round(dur)};
-      }
-    } catch(e){}
-    return {detected:false};
-  });
-
-  detectors.push(function detectByDebuggerTiming() {
-    try {
-      const start = performance.now();
-
-      debugger; 
-      const dur = performance.now() - start;
-      if (dur > CFG.maxConsoleOpenDurationMs) {
-        return {detected:true, reason:'debugger-timing:'+Math.round(dur)};
-      }
-    } catch(e){}
-    return {detected:false};
-  });
-
-  detectors.push(function detectByDevtoolsSources() {
-    try {
-      const all = performance.getEntriesByType && performance.getEntriesByType('resource') || [];
-      for (let i=0;i<all.length;i++){
-        const name = all[i].name || '';
-
-        if (/(\/__webpack_dev_server__\/)|(devtools|debugger|webpack-dev-server)/i.test(name)) {
-          return {detected:true, reason:'resource-name:'+name};
+(function init(){
+  try{
+    injectCss('body{margin:0}'); // small safety
+    document.addEventListener('keydown',function(e){
+      try{
+        var k=e.key||'';
+        if(k==='F12' || (e.ctrlKey&&e.shiftKey&&/^[ijck]$/i.test(k)) || (e.ctrlKey&&/^[us]$/i.test(k))){
+          e.preventDefault(); e.stopPropagation(); show();
         }
-      }
-    } catch(e){}
-    return {detected:false};
-  });
-
-  detectors.push(function detectByFnToStringPat() {
-    try {
-      const fn = function(){};
-      const s = Function.prototype.toString.call(fn);
-
-      if (typeof s !== 'string') return {detected:false};
-
-      if (s.length > 10000) return {detected:true, reason:'fn-toString-large'};
-    } catch(e){}
-    return {detected:false};
-  });
-
-  function runChecksOnce() {
-    for (let i=0;i<detectors.length;i++){
-      try {
-        const r = detectors[i]();
-        if (r && r.detected) {
-          triggerDefense(r.reason || 'detector-'+i);
-          return;
-        }
-      } catch(e){}
-    }
-  }
-
-  function init() {
-    if (state.detected) return;
-
-    if (CFG.blockTextSelection) {
-      safeTry(() => {
-        const css = document.createElement('style');
-        css.type = 'text/css';
-        css.appendChild(document.createTextNode('html,body{user-select:none;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;}'));
-        (document.head || document.documentElement).appendChild(css);
-      });
-    }
-
-    window.addEventListener('keydown', keyDownHandler, true);
-    if (CFG.disableContextMenu) window.addEventListener('contextmenu', contextHandler, true);
-
-    const id = setInterval(runChecksOnce, CFG.checkIntervalMs);
-    state.activeIntervals.push(id);
-
-    const id2 = setInterval(() => {
-      try {
-        const r = detectors[0](); 
-        if (r && r.detected) triggerDefense(r.reason);
-      } catch(e){}
-    }, 400);
-    state.activeIntervals.push(id2);
-
-    safeTry(runChecksOnce);
-  }
-
-  if (CFG.autoInit) {
-
-    if (document.readyState === 'loading') {
-
-      safeTry(init);
-      document.addEventListener('DOMContentLoaded', function(){  }, {once:true});
-    } else {
-      safeTry(init);
-    }
-  }
-
-  window.__devguard = {
-    trigger: triggerDefense,
-    init: init,
-    cfg: CFG
-  };
+      }catch(ex){}
+    },true);
+    document.addEventListener('contextmenu',function(e){ try{ e.preventDefault(); e.stopPropagation(); }catch(z){} },true);
+    injectCss('.adt-svg{opacity:.98}'); // tiny style
+    // run checks periodically
+    setInterval(detectOnce, (P(12)|0));
+    // run one immediate check
+    setTimeout(detectOnce,100);
+    // expose lightweight control for debugging if needed
+    try{ window.__adt={showUI:show}; }catch(e){}
+  }catch(e){}  
+})();
 
 })();
