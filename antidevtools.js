@@ -1,243 +1,199 @@
+// ip-blacklist-blocker.js
 (function(){
   'use strict';
 
-  var overlay = null;
-  var locked = false;
-  var checkTimer = null;
-  var ipSent = false;
+  // === Configure here ===
+  // add single IPs or CIDR ranges like '203.0.113.0/24'
+  const BLOCKED = [
+    '203.0.113.5',
+    '198.51.100.0/28',
+    '176.221.124.54'
+  ];
 
-  function el(t){return document.createElement(t)}
-  function css(txt){
-    var s = el('style');
-    s.textContent = txt;
+  // public IP provider and timeout ms
+  const IP_API = 'https://api.ipify.org?format=json';
+  const FETCH_TIMEOUT = 3000;
+
+  // overlay styling and message
+  const TITLE_TEXT = 'Access denied';
+  const MSG_TEXT = 'Your IP is blacklisted';
+  // =======================
+
+  function el(tag, props, children){
+    const n = document.createElement(tag);
+    if(props) {
+      Object.keys(props).forEach(k=>{
+        if(k === 'class') n.className = props[k];
+        else if(k === 'style') Object.assign(n.style, props[k]);
+        else n.setAttribute(k, props[k]);
+      });
+    }
+    if(children){
+      if(Array.isArray(children)) children.forEach(c => n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c));
+      else n.appendChild(typeof children === 'string' ? document.createTextNode(children) : children);
+    }
+    return n;
+  }
+
+  function injectStyles(){
+    const css = `
+    @keyframes bbFade{from{opacity:0;transform:scale(.98)}to{opacity:1;transform:scale(1)}}
+    html,body{height:100%}
+    .bb-overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+      background:linear-gradient(180deg,#070708,#121214);color:#eee;z-index:2147483647;
+      font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif;animation:bbFade .18s ease both}
+    .bb-card{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.04);
+      padding:28px;border-radius:14px;box-shadow:0 12px 36px rgba(0,0,0,.75);max-width:720px;width:calc(100% - 40px);text-align:center;backdrop-filter:blur(8px)}
+    .bb-icon{width:72px;height:72px;margin:0 auto 18px;display:flex;align-items:center;justify-content:center}
+    .bb-title{font-size:20px;font-weight:600;margin:0 0 8px;color:#fff}
+    .bb-msg{font-size:15px;color:#cfcfcf;margin:0;line-height:1.45;white-space:pre-line}
+    .bb-no-scroll{overflow:hidden !important}
+    `;
+    const s = el('style', {}, css);
     (document.head || document.documentElement).appendChild(s);
   }
 
-  css(`
-    @keyframes fadeIn{from{opacity:0;transform:scale(.98)}to{opacity:1;transform:scale(1)}}
-    .dtb-overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
-      background:linear-gradient(180deg,#0b0b0c,#141416);color:#eee;z-index:2147483647;
-      font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Arial,sans-serif;animation:fadeIn .18s ease both}
-    .dtb-card{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);
-      padding:28px 24px;border-radius:16px;box-shadow:0 12px 36px rgba(0,0,0,.7);
-      max-width:640px;text-align:center;backdrop-filter:blur(10px)}
-    .dtb-icon{width:72px;height:72px;margin:0 auto 16px auto;display:flex;align-items:center;justify-content:center}
-    .dtb-title{font-size:18px;font-weight:700;margin:0 0 6px 0;color:#fff;letter-spacing:.2px}
-    .dtb-msg{font-size:14px;color:#c9c9c9;margin:0 0 16px 0;line-height:1.45;white-space:pre-line}
-    .dtb-btn{background:#23d18b;border:none;padding:10px 18px;border-radius:12px;color:#0f0f0f;
-      font-weight:700;font-size:14px;cursor:pointer;transition:transform .14s ease}
-    .dtb-btn:active{transform:scale(.98)}
-    .dtb-hide-scroll{overflow:hidden !important}
-  `);
+  // convert IPv4 string to number
+  function ipToInt(ip){
+    const parts = ip.split('.');
+    if(parts.length !== 4) return null;
+    return parts.reduce((acc, p) => (acc<<8) + (parseInt(p,10) & 0xff), 0) >>> 0;
+  }
 
-  // Funkcja do pobierania adresu IP
-  function getIPAddress() {
-    return new Promise((resolve) => {
-      // Próba pobrania IP przez WebRTC
-      try {
-        const rtc = new RTCPeerConnection({iceServers: []});
-        rtc.createDataChannel('');
-        rtc.createOffer().then(offer => rtc.setLocalDescription(offer));
-        
-        rtc.onicecandidate = (event) => {
-          if (event.candidate) {
-            const ip = event.candidate.candidate.split(' ')[4];
-            if (ip && ip.match(/\d+\.\d+\.\d+\.\d+/)) {
-              resolve(ip);
-              return;
-            }
-          }
-          // Fallback - użyj zewnętrznego API
-          fetch('https://api.ipify.org?format=json')
-            .then(response => response.json())
-            .then(data => resolve(data.ip))
-            .catch(() => resolve('unknown'));
-        };
-        
-        setTimeout(() => {
-          fetch('https://api.ipify.org?format=json')
-            .then(response => response.json())
-            .then(data => resolve(data.ip))
-            .catch(() => resolve('unknown'));
-        }, 1000);
-      } catch (e) {
-        // Fallback na zewnętrzne API
-        fetch('https://api.ipify.org?format=json')
-          .then(response => response.json())
-          .then(data => resolve(data.ip))
-          .catch(() => resolve('unknown'));
+  // check if ip is in cidr range
+  function cidrMatch(ip, cidr){
+    if(!cidr.includes('/')) return false;
+    const [net, maskLenStr] = cidr.split('/');
+    const maskLen = parseInt(maskLenStr,10);
+    if(Number.isNaN(maskLen) || maskLen < 0 || maskLen > 32) return false;
+    const ipInt = ipToInt(ip);
+    const netInt = ipToInt(net);
+    if(ipInt === null || netInt === null) return false;
+    const mask = maskLen === 0 ? 0 : (~0 << (32 - maskLen)) >>> 0;
+    return (ipInt & mask) === (netInt & mask);
+  }
+
+  // check if ip matches any entry in BLOCKED
+  function isBlockedIp(ip){
+    if(!ip) return false;
+    for(let i=0;i<BLOCKED.length;i++){
+      const b = BLOCKED[i].trim();
+      if(!b) continue;
+      if(b.includes('/')){
+        if(cidrMatch(ip, b)) return true;
+      } else {
+        if(ip === b) return true;
       }
-    });
-  }
-
-  // Funkcja do wysyłania na webhook Discord
-  function sendToDiscordWebhook(ip, action) {
-    if (ipSent) return; // Zapobiegaj wielokrotnemu wysyłaniu
-    
-    // TUTAJ PODAJ SWÓJ WEBHOOK DISCORD
-    const webhookURL = 'https://discord.com/api/webhooks/1430059619056746599/ZveSM1aawolQa6EPMJpPupJaXI6Srk-xWD77gNkjTxyqiOKQPG8dYgFht1ruxO-F4Nwy';
-    
-    if (!webhookURL || webhookURL.includes('...')) {
-      console.warn('Webhook Discord nie jest skonfigurowany');
-      return;
     }
-
-    const embed = {
-      title: '🛡️ DevTools Detection Alert',
-      color: 0xff0000,
-      fields: [
-        {
-          name: '🌐 IP Address',
-          value: ip || 'unknown',
-          inline: true
-        },
-        {
-          name: '🔧 Action',
-          value: action,
-          inline: true
-        },
-        {
-          name: '🌍 User Agent',
-          value: navigator.userAgent.substring(0, 100) + '...',
-          inline: false
-        },
-        {
-          name: '📅 Timestamp',
-          value: new Date().toISOString(),
-          inline: true
-        }
-      ],
-      timestamp: new Date().toISOString()
-    };
-
-    fetch(webhookURL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        embeds: [embed],
-        content: `🚨 DevTools zostały otwarte!`
-      })
-    }).catch(error => console.error('Błąd wysyłania do Discord:', error));
-    
-    ipSent = true;
+    return false;
   }
 
-  // Funkcja do obsługi wykrycia i wysyłania IP
-  function handleDetection(action) {
-    getIPAddress().then(ip => {
-      sendToDiscordWebhook(ip, action);
-    });
-  }
+  // overlay creation
+  let overlayEl = null;
+  function createOverlay(title, msg){
+    if(overlayEl) return overlayEl;
+    injectStyles();
+    const wrap = el('div', { class: 'bb-overlay', role: 'alert' });
 
-  function makeOverlay(){
-    if(overlay) return overlay;
+    const card = el('div', { class: 'bb-card' });
 
-    var o = el('div'); o.className = 'dtb-overlay';
-    var card = el('div'); card.className = 'dtb-card';
-
-    var icon = el('div'); icon.className = 'dtb-icon';
-    var svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+    const iconWrap = el('div', { class: 'bb-icon' });
+    const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
     svg.setAttribute('viewBox','0 0 24 24');
-    svg.setAttribute('width','64'); svg.setAttribute('height','64');
-    svg.innerHTML = '<defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#23d18b"/><stop offset="1" stop-color="#2af598"/></linearGradient></defs><path fill="url(#g)" d="M12 2l8 4v6c0 5.25-3.5 10-8 11-4.5-1-8-5.75-8-11V6l8-4zm0 4.3l-5 2.5v4.9c0 3.75 2.8 7.4 5 8.3 2.2-.9 5-4.55 5-8.3V8.8l-5-2.5zm0 3.7a1 1 0 0 1 1 1v3.5a1 1 0 0 1-2 0V11a1 1 0 0 1 1-1zm0 7a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4z"/>';
-    icon.appendChild(svg);
+    svg.setAttribute('width','64');
+    svg.setAttribute('height','64');
+    svg.innerHTML = '<defs><linearGradient id="bggrad" x1="0" x2="1"><stop offset="0" stop-color="#ff6b6b"/><stop offset="1" stop-color="#ff3b6b"/></linearGradient></defs>'+
+      '<path fill="url(#bggrad)" d="M12 2C7.3 2 3.4 5.2 2.2 9.6c-.3 1 .5 2 1.6 2.1 0 0 2.6.3 5 1.9 1.9 1.3 4.2 1.3 6.1 0 2.4-1.6 5-1.9 5-1.9 1.1-.1 1.9-1.1 1.6-2.1C20.6 5.2 16.7 2 12 2z"/>';
+    iconWrap.appendChild(svg);
 
-    var title = el('div'); title.className = 'dtb-title'; title.textContent = 'Developer tools detected';
-    var msg = el('div'); msg.className = 'dtb-msg'; msg.textContent = 'The page is temporarily blocked while dev tools are open\nClose dev tools to continue';
-    var btn = el('button'); btn.className = 'dtb-btn'; btn.textContent = 'Reload';
-    btn.onclick = function(){ try{ location.reload(); }catch(e){} };
+    const titleEl = el('div', { class: 'bb-title' }, title || 'Access denied');
+    const msgEl = el('div', { class: 'bb-msg' }, msg || 'Your IP is blacklisted');
 
-    card.appendChild(icon);
-    card.appendChild(title);
-    card.appendChild(msg);
-    card.appendChild(btn);
-    o.appendChild(card);
+    card.appendChild(iconWrap);
+    card.appendChild(titleEl);
+    card.appendChild(msgEl);
+    wrap.appendChild(card);
 
-    overlay = o;
-    return o;
+    overlayEl = wrap;
+    return overlayEl;
   }
 
-  function lockPage(action){
-    if(locked) return;
-    locked = true;
-    
-    // Wyślij IP tylko przy pierwszym wykryciu
-    if (!ipSent) {
-      handleDetection(action);
-    }
-    
-    var o = makeOverlay();
-    if(!o.parentNode) document.body.appendChild(o);
-    try{ document.documentElement.classList.add('dtb-hide-scroll'); }catch(e){}
-    try{ window.stop(); }catch(e){}
-  }
-
-  function unlockPage(){
-    if(!locked) return;
-    locked = false;
-    if(overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
-    try{ document.documentElement.classList.remove('dtb-hide-scroll'); }catch(e){}
-  }
-
-  function detectByResize(){
+  function showBlock(message, title){
+    if(overlayEl && overlayEl.parentNode) return;
+    const o = createOverlay(title, message);
+    document.body.appendChild(o);
+    try{ document.documentElement.classList.add('bb-no-scroll'); }catch(e){}
+    // remove pointer events on body content
     try{
-      var ow=window.outerWidth|0, iw=window.innerWidth|0, oh=window.outerHeight|0, ih=window.innerHeight|0;
-      return (Math.abs(ow-iw)>160 || Math.abs(oh-ih)>160);
-    }catch(e){ return false }
+      document.body.style.pointerEvents = 'none';
+      // allow overlay itself to receive no pointer-blocking inside it is intentional so set pointer-events auto for overlay
+      o.style.pointerEvents = 'auto';
+    }catch(e){}
   }
 
-  function detectByConsole(){
-    try{
-      var tr=false; var o={toString:function(){tr=true;return''}};
-      console.log(o);
-      return tr;
-    }catch(e){return false}
+  function hideBlock(){
+    if(!overlayEl) return;
+    if(overlayEl.parentNode) overlayEl.parentNode.removeChild(overlayEl);
+    try{ document.documentElement.classList.remove('bb-no-scroll'); }catch(e){}
+    try{ document.body.style.pointerEvents = ''; }catch(e){}
+    overlayEl = null;
   }
 
-  function isDevtoolsOpen(){
-    return detectByResize() || detectByConsole();
+  // fetch public IP with timeout
+  function fetchWithTimeout(url, timeout){
+    return new Promise(function(resolve, reject){
+      const timer = setTimeout(function(){
+        reject(new Error('timeout'));
+      }, timeout);
+      fetch(url, { cache: 'no-store', credentials: 'omit' }).then(function(resp){
+        clearTimeout(timer);
+        resolve(resp);
+      }).catch(function(err){
+        clearTimeout(timer);
+        reject(err);
+      });
+    });
   }
 
-  function tick(){
-    if(isDevtoolsOpen()) lockPage('Periodic Check');
-    else unlockPage();
+  function getPublicIP(){
+    return new Promise(function(resolve){
+      fetchWithTimeout(IP_API, FETCH_TIMEOUT).then(function(r){
+        if(!r.ok) { resolve(null); return; }
+        r.json().then(function(j){
+          resolve(j && j.ip ? String(j.ip).trim() : null);
+        }).catch(function(){ resolve(null); });
+      }).catch(function(){
+        resolve(null);
+      });
+    });
   }
 
-  function keyHandler(e){
-    try{
-      var k = e.key || '';
-      var ctrl = e.ctrlKey || e.metaKey;
-      var sh = e.shiftKey;
-
-      if(
-        k === 'F12' ||
-        (ctrl && sh && /^(I|J|C|K)$/i.test(k)) ||
-        (ctrl && /^(S|U)$/i.test(k))
-      ){
-        e.preventDefault();
-        e.stopPropagation();
-        lockPage(`Keyboard Shortcut: ${k} (Ctrl: ${ctrl}, Shift: ${sh})`);
+  // main check flow
+  function runCheck(){
+    getPublicIP().then(function(ip){
+      if(!ip){
+        // couldn't determine public ip do nothing
+        return;
       }
-    }catch(err){}
+      if(isBlockedIp(ip)){
+        showBlock(MSG_TEXT, TITLE_TEXT);
+      } else {
+        hideBlock();
+      }
+    });
   }
 
-  function contextHandler(e){
-    try{ e.preventDefault(); e.stopPropagation(); }catch(err){}
-  }
-
+  // run on load then periodically (optional)
   function start(){
-    document.addEventListener('keydown', keyHandler, true);
-    document.addEventListener('contextmenu', contextHandler, true);
-    if(checkTimer) clearInterval(checkTimer);
-    checkTimer = setInterval(tick, 400);
-    setTimeout(tick, 120);
+    runCheck();
+    // re-check occasionally in case IP changes (eg VPN toggled client side)
+    setInterval(runCheck, 5 * 60 * 1000); // every 5 minutes
   }
 
   if(document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', start);
-  }else{
+  } else {
     start();
   }
+
 })();
