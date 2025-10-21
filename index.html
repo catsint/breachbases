@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title></title>
+  <link rel="stylesheet" href="https://jdan.github.io/98.css/98.css">
+  <link rel="preload" href="crt.css" as="style">  
+  <style>
+        @font-face {
+          font-family: 'W95FA';
+          src: url('W95FA.otf') format('opentype');
+        }
+ 
+        body {
+          margin: 0;
+          padding: 0;
+          background-image: url('scarebg.png');
+          background-size: cover;
+          font-family: 'W95FA', sans-serif; 
+          height: 100vh;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden; 
+          z-index: 5;
+        }
+        .audwin {
+            max-width: 650px;
+            width: 100%;
+            margin: 20px 0;
+        }
+
+        .audio-controls {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: #000;
+        }
+
+        .controls a img {
+            height: 13px;
+            cursor: pointer;
+        }
+
+        .controls {
+            user-select: none;
+        }
+
+        #songInfo {
+            font-family: 'VCR OSD Mono';
+            font-size: 12px;
+        }
+
+        #songTitle {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        #songInfo {
+            display: flex;
+        }
+
+        .desktop {
+          flex: 1;
+          position: relative;
+          display: flex;
+          flex-wrap: wrap;
+          padding: 15px;
+          padding-bottom: 50px; 
+        }
+
+        .desktop-icon {
+          width: 60px;
+          text-align: center;
+          margin: 10px;
+          color: white;
+          cursor: pointer;
+         }
+
+        .desktop-icon img {
+          width: 40px;
+          height: 40px;
+          margin-bottom: 5px;
+        }
+
+        .taskbar {
+          height: 40px;
+          background-color: #C0C0C0;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          position: absolute;
+          bottom: 0; 
+          width: 100%; 
+          padding: 0 10px; 
+          z-index: 5;
+        }
+
+        .start-btn {
+          display: flex;
+          align-items: center;
+          background-color: #C0C0C0;
+          border: 2px solid white;
+          cursor: pointer;
+          padding: 5px 10px;
+          font-size: 14px;
+        }
+
+        .start-btn img {
+          width: 16px;
+          height: 16px;
+          margin-right: 5px;
+        }
+
+        .clock {
+          color: black; 
+          font-size: 14px; 
+          cursor: pointer;
+          background-color: #C0C0C0; 
+          border: 2px solid white; 
+          padding: 5px 10px; 
+          margin-right: 15px; 
+        }
+
+        .start-menu {
+          display: none;
+          position: absolute;
+          bottom: 45px;
+          left: 0;
+          background-color: #C0C0C0;
+          padding: 10px;
+          border: 2px solid #000;
+          width: 200px;
+        }
+
+        .start-menu.open {
+           display: block;
+        }
+
+        .window {
+           position: absolute;
+           top: 100px;
+           left: 100px;
+           width: 300px;
+           max-height: 400px;
+           z-index: 10;
+           display: none;
+           border: 2px solid black;
+           background-color: #C0C0C0; 
+           overflow: auto;
+        }
+
+        .title-bar {
+           display: flex;
+           justify-content: space-between;
+           align-items: center;
+           padding: 2px 5px;
+           background-color: blue;
+           color: white;
+           cursor: move; 
+        }
+
+        .loading {
+           display: flex;
+           align-items: center;
+           height: 100px;
+           background-color: #C0C0C0; 
+        }
+
+        .loading img {
+           width: 40px; 
+           height: 40px; 
+           margin-right: 10px; 
+        }
+
+        .comment-box {
+           display: flex;
+           flex-direction: column;
+           position: absolute;
+           bottom: 50px;
+           right: 15px;
+           background-color: white;
+           border: 2px solid black;
+           padding: 10px;
+           max-width: 300px;
+           z-index: 20; 
+        }
+
+        .comment-box input, .comment-box textarea {
+           margin-bottom: 5px;
+        }
+
+        #crt {
+           background-image: url('pixel.apng');
+           background-size: 2px 1px;
+           background-color: #fff;
+           background-blend-mode: light;
+           mix-blend-mode: multiply;
+           pointer-events: none;
+           opacity: .4
+        }
+
+        #crt {
+           position: fixed;
+           width: 100%;
+           top: 0;
+           bottom: 0;
+           right: 0;
+           left: 0;
+           z-index: 9999
+        }
+
+        @-moz-document url-prefix() {
+            #crt {
+              opacity: .1
+            }
+        }
+
+        .comment-list {
+            margin-top: 10px;
+            max-height: 150px;
+            overflow-y: auto; 
+        }
+
+        .comment-item {
+            margin-bottom: 5px;
+            border-bottom: 1px solid #ddd
+        }
+
+        .audwin {
+            position: absolute; 
+            top: 10px; 
+            right: 15px; 
+            max-width: 200px; 
+            z-index: 20; 
+        }
+
+        .audio-controls {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: white;
+        }
+
+        .controls a img {
+            height: 13px;
+            cursor: pointer;
+        }
+        
+        .controls {
+            user-select: none;
+        }
+
+        #songInfo {
+            font-family: 'VCR OSD Mono';
+            font-size: 12px;
+        }
+
+        #songTitle {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        #songInfo {
+            display: flex;
+        }
+
+        body:before {
+	content: "";
+	position: fixed;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+	z-index: 1000;
+	background-image: url(overlay.png);
+	background-repeat: all;
+	background-position: 0px 0px;
+	animation-name: Static;
+	animation-duration: 2s;
+	animation-iteration-count: infinite;
+	animation-timing-function: steps(4);
+	box-shadow: inset 0px 0px 10em rgba(0,0,0,0.4);
+}
+
+body:after {
+	content: "";
+	position: fixed;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+	z-index: 1000;
+	background-image: url(overlay2.png);
+	background-repeat: all;
+	background-position: 0px 0px;
+	animation-name: Static;
+	animation-duration: 0.8s;
+	animation-iteration-count: infinite;
+	animation-timing-function: steps(4);
+}
+
+@keyframes Static {
+	0% { background-position: 0px 0px; }
+	100% { background-position: 0px 4px; }
+}
+
+
+#overlay-image {
+        position: absolute;
+        bottom: 40px; 
+        left: 3%;
+        z-index: 9;
+        width: 500px;
+    }
+
+    #animated-text {
+        position: absolute;
+        bottom: 300px; 
+        left: 10%;
+        z-index: 9;
+        font-family: url('countdown.ttf'), sans-serif;
+        font-size: 36px; 
+        color: white;
+        text-shadow: -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000; 
+        box-shadow: #000;
+        white-space: nowrap;
+    }
+
+    @keyframes blinkCursor {
+        from { border-right-color: white; }
+        to { border-right-color: transparent; }
+    }
+
+    .typed-text {
+        animation: blinkCursor 0.7s step-end infinite;
+    }
+
+    #header {
+    position: relative;
+    z-index: 1;
+}
+
+
+
+  </style>
+</head>
+<body>
+
+    
+    <div class="noise"></div>
+    <div class="lines"></div>
+
+    <div id="animated-text" class="typed-text"></div>
+    
+
+    
+  <div class="desktop">
+    <div class="desktop-icon" ondblclick="openMyComputer()">
+      <img src="mycomputer.png" alt="My Computer">
+      <div>My Computer</div>
+    </div>
+
+    <div class="desktop-icon" ondblclick="openRecycleBin()">
+      <img src="win95rec.png" alt="Recycle Bin">
+      <div>Recycle Bin</div>
+    </div>
+
+    <div class="desktop-icon" ondblclick="openNetwork()">
+      <img src="network.png" alt="network">
+      <div>Network</div>
+    </div>
+
+    <div class="desktop-icon" ondblclick="openMeWindow()">
+      <img src="antiped.jpg" alt="Me">
+      <div>@sprytny</div>
+    </div>
+
+    <div class="desktop-icon" ondblclick="openApWindow()">
+      <img src="appicon.jpg" alt="Me">
+      <div>@exploit</div>
+    </div>
+
+
+    <audio id="audio"></audio>
+
+    <div class="audwin">
+        <div class="audio-controls">
+            <p style="font-size:13px;margin-bottom:5px;">Now Playing:</p>
+            <div id="songInfo" class="text-center">
+                <div id="artist">Artist</div>&nbsp;-&nbsp;<div id="songTitle">Song</div>
+            </div>
+            <div class="controls" style="margin-top:10px;margin-bottom:7px;">
+                <a onclick="previousAudio()" style="margin-right:10px;"><img src="back.png"></a>
+                <a id="playPauseButton" onclick="togglePlayPause()" style="margin-right:10px;"><img src="play.png"></a>
+                <a onclick="nextAudio()"><img src="next.png"></a>
+            </div>
+        </div>
+    </div>
+
+    <div id="window1" class="window" style="display:none;">
+      <div class="title-bar" onmousedown="startDrag(event, 'window1')">
+        <span>My Computer</span>
+        <button aria-label="Close" onclick="closeWindow('window1')">X</button>
+      </div>
+      <div class="loading">
+        <img src="loading.gif" alt="Loading..." />
+        <span>Loading...</span>
+      </div>
+      <div class="window-body" style="display:none;">
+        <p><strong>Specifications:</strong></p>
+        <ul>
+          <li>Processor: Intel Pentium III</li>
+          <li>RAM: 512 MB</li>
+          <li>Disk Space: 20 GB</li>
+        </ul>
+      </div>
+    </div>
+
+    <div id="window2" class="window" style="display:none;">
+      <div class="title-bar" onmousedown="startDrag(event, 'window2')">
+        <span>Recycle Bin</span>
+        <button aria-label="Close" onclick="closeWindow('window2')">X</button>
+      </div>
+      <div class="loading">
+        <img src="loading.gif" alt="Loading..." />
+        <span>Loading...</span>
+      </div>
+      <div class="window-body" style="display:none;">
+        <p>Empty.</p>
+      </div>
+    </div>
+
+    <div id="window3" class="window" style="display:none;">
+      <div class="title-bar" onmousedown="startDrag(event, 'window3')">
+        <span>Network</span>
+        <button aria-label="Close" onclick="closeWindow('window3')">X</button>
+      </div>
+      <div class="loading">
+        <img src="loading.gif" alt="Loading..." />
+        <span>Loading...</span>
+      </div>
+      <div class="window-body" style="display:none;">
+        <p>Network resources:</p>
+        <p><strong>IP Address:</strong> 192.168.1.10</p>
+        <p><strong>Connected Devices:</strong></p>
+        <ul>
+          <li><a href="">@obsessor</a></li>
+          <li><a href="">@exploit</a></li>
+        </ul>
+        <p><strong>Network Speed:</strong> 100 Mbps</p>
+      </div>
+
+    </div>
+
+    <div id="window4" class="window" style="display:none;">
+        <div class="title-bar" onmousedown="startDrag(event, 'window4')">
+          <span>@sprytny</span>
+          <button aria-label="Close" onclick="closeWindow('window4')">X</button>
+        </div>
+        <div class="loading">
+          <img src="loading.gif" alt="Loading..." />
+          <span>Loading...</span>
+        </div>
+        <div class="window-body" style="display:none;">
+          <img src="2.gif" alt="Profile" style="width:100%; height:auto;">
+          <br>
+          <p>hi</p>
+          <ul>
+            <li><a href="https://meow.systems/">meow meow meow</a></li>
+          </ul>
+          <div class="social-media-buttons">
+            <button onclick="window.open('https://discord.com/users/1411636475191099513')">Discord</button>
+            <button onclick="window.open('https://catchus.live/')">Doxbin</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="window5" class="window" style="display:none;">
+        <div class="title-bar" onmousedown="startDrag(event, 'window5')">
+          <span>@exploit</span>
+          <button aria-label="Close" onclick="closeWindow('window5')">X</button>
+        </div>
+        <div class="loading">
+          <img src="loading.gif" alt="Loading..." />
+          <span>Loading...</span>
+        </div>
+        <div class="window-body" style="display:none;">
+          <img src="exp.gif" alt="Profile" style="width:100%; height:auto;">
+          <br>
+          <p>skiddingforlive:</p>
+          <ul>
+            <li><a href="https://meow.systems/">Skiddingwithpassion</a></li>
+
+          </ul>
+          <div class="social-media-buttons">
+            <button onclick="window.open('https://discord.com/users/1351070034214256681')">Discord</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="window6" class="window" style="display:none;">
+        <div class="title-bar" onmousedown="startDrag(event, 'window6')">
+          <span>Anti Extort</span>
+          <button aria-label="Close" onclick="closeWindow('window6')">X</button>
+        </div>
+        <div class="loading">
+          <img src="loading.gif" alt="Loading..." />
+          <span>Loading...</span>
+        </div>
+        <div class="window-body" style="display:none;">
+          <br>
+          <p>Anti Pedo & Extort Roster:</p>
+          <ul>
+            <li><a href="nextnigger">If you know assembly everything is open source</a></li>
+            <li><a href="nextnigger">Femboy hunters</a></li>
+            <li><a href="nextnigger">Doxxing niggas</a></li>
+            <li><a href="nextnigger">meow meow meow</a></li>
+          </ul>
+          <div class="social-media-buttons">
+            <button onclick="window.open('nextnigger')">nextnigger</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="window7" class="window" style="display:none;">
+        <div class="title-bar" onmousedown="startDrag(event, 'window7')">
+          <span>Owners</span>
+          <button aria-label="Close" onclick="closeWindow('window7')">X</button>
+        </div>
+        <div class="loading">
+          <img src="loading.gif" alt="Loading..." />
+          <span>Loading...</span>
+        </div>
+        <div class="window-body" style="display:none;">
+          <br>
+          <p>pozniej zrobie</p>
+          <ul>
+            <li><a href="pozniej zrobie"></a></li>
+            <li><a href="pozniej zrobie"></a></li>
+            <li><a href="pozniej zrobie"></a></li>
+            <li><a href="pozniej zrobie"></a></li>
+            <li><a href="pozniej zrobie"></a></li>
+          </ul>
+          <div class="social-media-buttons">
+            <button onclick="window.open('pozniej zrobie')">pozniej zrobie</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="window8" class="window" style="display:none;">
+        <div class="title-bar" onmousedown="startDrag(event, 'window8')">
+          <span>pozniej zrobie</span>
+          <button aria-label="Close" onclick="closeWindow('window8')">X</button>
+        </div>
+        <div class="loading">
+          <img src="loading.gif" alt="Loading..." />
+          <span>Loading...</span>
+        </div>
+        <div class="window-body" style="display:none;">
+          <br>
+          <p>pozniej zrobie</p>
+          <ul>
+            <li><a href="pozniej zrobie">pozniej zrobiee</a></li>
+          </ul>
+        </div>
+      </div>
+
+  <div class="taskbar">
+    <div class="start-btn" onclick="toggleStartMenu()">
+      <img src="start.png" alt="Start">
+      <span>Start</span>
+    </div>
+    <div class="clock" id="clock"></div>
+    <div class="start-menu" id="startMenu">
+      <p>Start Menu</p>
+      <ul>
+        <li>Profile</li>
+        <li>Settings</li>
+        <li>Shut Down</li>
+        <li>Run...</li>
+      </ul>
+    </div>
+  </div>
+
+  <script src="music.js"></script>
+
+<script>
+const phrases = [
+    "CATCH US >_<",
+    "IF YOU KNOW ASSEMBLY EVERYTHING IS OPEN SOURCE",
+    "FEMBOY HUNTERS",
+    "DOXXING NIGGAS",
+    "MEOW MEOW MEOW",
+    "PEDOS DESERVE CASTRATION",
+    "HIHI",
+  ];
+  
+  let currentPhraseIndex = 0;
+  let index = 0;
+  let isDeleting = false;
+
+  function typeText() {
+    const animatedText = document.getElementById('animated-text');
+    const currentPhrase = phrases[currentPhraseIndex];
+
+    if (!isDeleting && index < currentPhrase.length) {
+      animatedText.textContent = currentPhrase.slice(0, index + 1);
+      index++;
+      setTimeout(typeText, 100); 
+    } else if (isDeleting && index >= 0) {
+      animatedText.textContent = currentPhrase.slice(0, index);
+      index--;
+      setTimeout(typeText, 50); 
+    } else if (index === currentPhrase.length) {
+      isDeleting = true;
+      setTimeout(typeText, 1000); 
+    } else if (index === -1) {
+      isDeleting = false;
+      currentPhraseIndex = (currentPhraseIndex + 1) % phrases.length;
+      setTimeout(typeText, 500); 
+    }
+  }
+
+  window.onload = () => {
+    typeText();
+  };
+
+
+    document.addEventListener("DOMContentLoaded", function() {
+        setTimeout(function() {
+            document.querySelector('#window6 .loading').style.display = 'none'; 
+            document.querySelector('#window6 .window-body').style.display = 'block';
+        }, 2000);
+    });
+
+    function openMyComputer() {
+      openWindow('window1');
+    }
+
+    function openRecycleBin() {
+      openWindow('window2');
+    }
+
+    function openNetwork() {
+      openWindow('window3');
+    }
+
+    function openMeWindow() {
+      openWindow('window4');
+    }
+
+    function openApWindow() {
+      openWindow('window5');
+    }
+
+    function openAeWindow() {
+      openWindow('window6');
+    }
+
+    function openownWindow() {
+      openWindow('window7');
+    }
+
+    function openarchiveWindow() {
+      openWindow('window8');
+    }
+
+    function openWindow(windowId) {
+      const windowElem = document.getElementById(windowId);
+      windowElem.style.display = 'block';
+      setTimeout(() => {
+        const loading = windowElem.querySelector('.loading');
+        loading.style.display = 'none';
+        const body = windowElem.querySelector('.window-body');
+        body.style.display = 'block';
+      }, 1000); 
+    }
+
+    function closeWindow(windowId) {
+      const windowElem = document.getElementById(windowId);
+      windowElem.style.display = 'none';
+    }
+
+    function toggleStartMenu() {
+      const startMenu = document.getElementById('startMenu');
+      startMenu.classList.toggle('open');
+    }
+
+    function startDrag(e, windowId) {
+      const windowElem = document.getElementById(windowId);
+      let offsetX = e.clientX - windowElem.getBoundingClientRect().left;
+      let offsetY = e.clientY - windowElem.getBoundingClientRect().top;
+
+      function dragMove(e) {
+        windowElem.style.left = e.clientX - offsetX + 'px';
+        windowElem.style.top = e.clientY - offsetY + 'px';
+      }
+
+      function dragEnd() {
+        document.removeEventListener('mousemove', dragMove);
+        document.removeEventListener('mouseup', dragEnd);
+      }
+
+      document.addEventListener('mousemove', dragMove);
+      document.addEventListener('mouseup', dragEnd);
+    }
+
+
+
+    function updateClock() {
+      const clock = document.getElementById('clock');
+      const now = new Date();
+      clock.textContent = now.toLocaleTimeString();
+    }
+
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    window.addEventListener('message', function(event) {
+          if (event.data === 'playMusic') {
+              document.getElementById('overlays').style.display = 'none';
+              
+              playMedia();
+          }
+      });
+
+  </script>
+</body>
+</html>
