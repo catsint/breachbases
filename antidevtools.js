@@ -1,120 +1,243 @@
-/*!
-  antidevtools.js — minimal dark UI
-  shows elegant overlay if devtools are opened
-*/
 (function(){
   'use strict';
 
-  let shown = false;
+  var overlay = null;
+  var locked = false;
+  var checkTimer = null;
+  var ipSent = false;
 
   function el(t){return document.createElement(t)}
   function css(txt){
-    const s=el('style');
-    s.textContent=txt;
-    document.head.appendChild(s);
+    var s = el('style');
+    s.textContent = txt;
+    (document.head || document.documentElement).appendChild(s);
   }
 
-  function showWarning(){
-    if(shown) return;
-    shown = true;
-    try{ console.clear(); }catch(e){}
+  css(`
+    @keyframes fadeIn{from{opacity:0;transform:scale(.98)}to{opacity:1;transform:scale(1)}}
+    .dtb-overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+      background:linear-gradient(180deg,#0b0b0c,#141416);color:#eee;z-index:2147483647;
+      font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Arial,sans-serif;animation:fadeIn .18s ease both}
+    .dtb-card{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);
+      padding:28px 24px;border-radius:16px;box-shadow:0 12px 36px rgba(0,0,0,.7);
+      max-width:640px;text-align:center;backdrop-filter:blur(10px)}
+    .dtb-icon{width:72px;height:72px;margin:0 auto 16px auto;display:flex;align-items:center;justify-content:center}
+    .dtb-title{font-size:18px;font-weight:700;margin:0 0 6px 0;color:#fff;letter-spacing:.2px}
+    .dtb-msg{font-size:14px;color:#c9c9c9;margin:0 0 16px 0;line-height:1.45;white-space:pre-line}
+    .dtb-btn{background:#23d18b;border:none;padding:10px 18px;border-radius:12px;color:#0f0f0f;
+      font-weight:700;font-size:14px;cursor:pointer;transition:transform .14s ease}
+    .dtb-btn:active{transform:scale(.98)}
+    .dtb-hide-scroll{overflow:hidden !important}
+  `);
 
-    css(`
-      @keyframes fadeIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
-      @keyframes spin{to{transform:rotate(360deg)}}
-      .adt-overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
-        background:linear-gradient(180deg,#0b0b0c,#141416);color:#eee;z-index:999999;
-        font-family:Inter,ui-sans-serif,system-ui;animation:fadeIn .3s ease both}
-      .adt-card{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);
-        padding:32px 28px;border-radius:16px;box-shadow:0 12px 36px rgba(0,0,0,.7);
-        max-width:640px;text-align:center;backdrop-filter:blur(10px)}
-      .adt-icon{width:72px;height:72px;margin:0 auto 18px auto;display:flex;align-items:center;justify-content:center}
-      .adt-svg{width:64px;height:64px;animation:spin 14s linear infinite}
-      .adt-title{font-size:20px;font-weight:600;margin-bottom:8px;color:#fff}
-      .adt-msg{font-size:15px;color:#c9c9c9;margin-bottom:20px;white-space:pre-line;line-height:1.4}
-      .adt-btn{background:#23d18b;border:none;padding:10px 20px;border-radius:10px;color:#0f0f0f;
-        font-weight:600;font-size:15px;cursor:pointer;transition:all .2s}
-      .adt-btn:hover{transform:translateY(-1px);background:#29e69b}
-    `);
+  // Funkcja do pobierania adresu IP
+  function getIPAddress() {
+    return new Promise((resolve) => {
+      // Próba pobrania IP przez WebRTC
+      try {
+        const rtc = new RTCPeerConnection({iceServers: []});
+        rtc.createDataChannel('');
+        rtc.createOffer().then(offer => rtc.setLocalDescription(offer));
+        
+        rtc.onicecandidate = (event) => {
+          if (event.candidate) {
+            const ip = event.candidate.candidate.split(' ')[4];
+            if (ip && ip.match(/\d+\.\d+\.\d+\.\d+/)) {
+              resolve(ip);
+              return;
+            }
+          }
+          // Fallback - użyj zewnętrznego API
+          fetch('https://api.ipify.org?format=json')
+            .then(response => response.json())
+            .then(data => resolve(data.ip))
+            .catch(() => resolve('unknown'));
+        };
+        
+        setTimeout(() => {
+          fetch('https://api.ipify.org?format=json')
+            .then(response => response.json())
+            .then(data => resolve(data.ip))
+            .catch(() => resolve('unknown'));
+        }, 1000);
+      } catch (e) {
+        // Fallback na zewnętrzne API
+        fetch('https://api.ipify.org?format=json')
+          .then(response => response.json())
+          .then(data => resolve(data.ip))
+          .catch(() => resolve('unknown'));
+      }
+    });
+  }
 
-    const overlay = el('div');
-    overlay.className = 'adt-overlay';
-    const card = el('div');
-    card.className = 'adt-card';
+  // Funkcja do wysyłania na webhook Discord
+  function sendToDiscordWebhook(ip, action) {
+    if (ipSent) return; // Zapobiegaj wielokrotnemu wysyłaniu
+    
+    // TUTAJ PODAJ SWÓJ WEBHOOK DISCORD
+    const webhookURL = 'https://discord.com/api/webhooks/...';
+    
+    if (!webhookURL || webhookURL.includes('...')) {
+      console.warn('Webhook Discord nie jest skonfigurowany');
+      return;
+    }
 
-    const iconWrap = el('div');
-    iconWrap.className = 'adt-icon';
-    const svgNS = 'http://www.w3.org/2000/svg';
-    const svg = document.createElementNS(svgNS,'svg');
+    const embed = {
+      title: '🛡️ DevTools Detection Alert',
+      color: 0xff0000,
+      fields: [
+        {
+          name: '🌐 IP Address',
+          value: ip || 'unknown',
+          inline: true
+        },
+        {
+          name: '🔧 Action',
+          value: action,
+          inline: true
+        },
+        {
+          name: '🌍 User Agent',
+          value: navigator.userAgent.substring(0, 100) + '...',
+          inline: false
+        },
+        {
+          name: '📅 Timestamp',
+          value: new Date().toISOString(),
+          inline: true
+        }
+      ],
+      timestamp: new Date().toISOString()
+    };
+
+    fetch(webhookURL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        embeds: [embed],
+        content: `🚨 DevTools zostały otwarte!`
+      })
+    }).catch(error => console.error('Błąd wysyłania do Discord:', error));
+    
+    ipSent = true;
+  }
+
+  // Funkcja do obsługi wykrycia i wysyłania IP
+  function handleDetection(action) {
+    getIPAddress().then(ip => {
+      sendToDiscordWebhook(ip, action);
+    });
+  }
+
+  function makeOverlay(){
+    if(overlay) return overlay;
+
+    var o = el('div'); o.className = 'dtb-overlay';
+    var card = el('div'); card.className = 'dtb-card';
+
+    var icon = el('div'); icon.className = 'dtb-icon';
+    var svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
     svg.setAttribute('viewBox','0 0 24 24');
-    svg.className = 'adt-svg';
-    svg.innerHTML = `
-      <defs>
-        <linearGradient id="grad" x1="0" x2="1">
-          <stop offset="0" stop-color="#23d18b"/>
-          <stop offset="1" stop-color="#2af598"/>
-        </linearGradient>
-      </defs>
-      <path fill="url(#grad)" d="M12 2l8 4v6c0 5.25-3.5 10-8 11-4.5-1-8-5.75-8-11V6l8-4zm0 4.3l-5 2.5v4.9c0 3.75 2.8 7.4 5 8.3 2.2-.9 5-4.55 5-8.3V8.8l-5-2.5zm0 3.7a1 1 0 0 1 1 1v3.5a1 1 0 0 1-2 0V11a1 1 0 0 1 1-1zm0 7a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4z"/>
-    `;
-    iconWrap.appendChild(svg);
+    svg.setAttribute('width','64'); svg.setAttribute('height','64');
+    svg.innerHTML = '<defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#23d18b"/><stop offset="1" stop-color="#2af598"/></linearGradient></defs><path fill="url(#g)" d="M12 2l8 4v6c0 5.25-3.5 10-8 11-4.5-1-8-5.75-8-11V6l8-4zm0 4.3l-5 2.5v4.9c0 3.75 2.8 7.4 5 8.3 2.2-.9 5-4.55 5-8.3V8.8l-5-2.5zm0 3.7a1 1 0 0 1 1 1v3.5a1 1 0 0 1-2 0V11a1 1 0 0 1 1-1zm0 7a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4z"/>';
+    icon.appendChild(svg);
 
-    const title = el('div');
-    title.className = 'adt-title';
-    title.textContent = 'Warning';
+    var title = el('div'); title.className = 'dtb-title'; title.textContent = 'Developer tools detected';
+    var msg = el('div'); msg.className = 'dtb-msg'; msg.textContent = 'The page is temporarily blocked while dev tools are open\nClose dev tools to continue';
+    var btn = el('button'); btn.className = 'dtb-btn'; btn.textContent = 'Reload';
+    btn.onclick = function(){ try{ location.reload(); }catch(e){} };
 
-    const msg = el('div');
-    msg.className = 'adt-msg';
-    msg.textContent = 'Developer tools detected\n\nPlease close dev tools and refresh the page';
-
-    const btn = el('button');
-    btn.className = 'adt-btn';
-    btn.textContent = 'Refresh page 🔄';
-    btn.onclick = ()=>{ location.reload(); };
-
-    card.appendChild(iconWrap);
+    card.appendChild(icon);
     card.appendChild(title);
     card.appendChild(msg);
     card.appendChild(btn);
-    overlay.appendChild(card);
-    document.body.appendChild(overlay);
+    o.appendChild(card);
+
+    overlay = o;
+    return o;
   }
 
-  function detectResize(){
-    try{
-      const ow=window.outerWidth|0, iw=window.innerWidth|0, oh=window.outerHeight|0, ih=window.innerHeight|0;
-      return (Math.abs(ow-iw)>160 || Math.abs(oh-ih)>160);
-    }catch(e){return false}
-  }
-
-  function detectConsole(){
-    try{
-      let triggered=false;
-      const obj={toString:function(){triggered=true;return''}};
-      console.log(obj);
-      return triggered;
-    }catch(e){return false}
-  }
-
-  function check(){
-    if(shown) return;
-    if(detectResize()||detectConsole()) showWarning();
-  }
-
-  function keyBlock(e){
-    const k=e.key||'';
-    if(k==='F12'||(e.ctrlKey&&e.shiftKey&&/[IJCK]/i.test(k))||(e.ctrlKey&&/[US]/i.test(k))){
-      e.preventDefault(); e.stopPropagation();
-      showWarning();
+  function lockPage(action){
+    if(locked) return;
+    locked = true;
+    
+    // Wyślij IP tylko przy pierwszym wykryciu
+    if (!ipSent) {
+      handleDetection(action);
     }
+    
+    var o = makeOverlay();
+    if(!o.parentNode) document.body.appendChild(o);
+    try{ document.documentElement.classList.add('dtb-hide-scroll'); }catch(e){}
+    try{ window.stop(); }catch(e){}
   }
 
-  function contextBlock(e){
-    e.preventDefault(); e.stopPropagation();
+  function unlockPage(){
+    if(!locked) return;
+    locked = false;
+    if(overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    try{ document.documentElement.classList.remove('dtb-hide-scroll'); }catch(e){}
   }
 
-  document.addEventListener('keydown',keyBlock,true);
-  document.addEventListener('contextmenu',contextBlock,true);
-  setInterval(check,700);
-  setTimeout(check,200);
+  function detectByResize(){
+    try{
+      var ow=window.outerWidth|0, iw=window.innerWidth|0, oh=window.outerHeight|0, ih=window.innerHeight|0;
+      return (Math.abs(ow-iw)>160 || Math.abs(oh-ih)>160);
+    }catch(e){ return false }
+  }
+
+  function detectByConsole(){
+    try{
+      var tr=false; var o={toString:function(){tr=true;return''}};
+      console.log(o);
+      return tr;
+    }catch(e){return false}
+  }
+
+  function isDevtoolsOpen(){
+    return detectByResize() || detectByConsole();
+  }
+
+  function tick(){
+    if(isDevtoolsOpen()) lockPage('Periodic Check');
+    else unlockPage();
+  }
+
+  function keyHandler(e){
+    try{
+      var k = e.key || '';
+      var ctrl = e.ctrlKey || e.metaKey;
+      var sh = e.shiftKey;
+
+      if(
+        k === 'F12' ||
+        (ctrl && sh && /^(I|J|C|K)$/i.test(k)) ||
+        (ctrl && /^(S|U)$/i.test(k))
+      ){
+        e.preventDefault();
+        e.stopPropagation();
+        lockPage(`Keyboard Shortcut: ${k} (Ctrl: ${ctrl}, Shift: ${sh})`);
+      }
+    }catch(err){}
+  }
+
+  function contextHandler(e){
+    try{ e.preventDefault(); e.stopPropagation(); }catch(err){}
+  }
+
+  function start(){
+    document.addEventListener('keydown', keyHandler, true);
+    document.addEventListener('contextmenu', contextHandler, true);
+    if(checkTimer) clearInterval(checkTimer);
+    checkTimer = setInterval(tick, 400);
+    setTimeout(tick, 120);
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', start);
+  }else{
+    start();
+  }
 })();
