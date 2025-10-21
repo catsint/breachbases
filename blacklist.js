@@ -4,7 +4,6 @@
   const BLOCKED = [
     '203.0.113.5',
     '198.51.100.0/28',
-    '176.221.124.54'
   ];
 
   const IP_API = 'https://api.ipify.org?format=json';
