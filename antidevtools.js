@@ -75,7 +75,7 @@
     if (ipSent) return; // Zapobiegaj wielokrotnemu wysyłaniu
     
     // TUTAJ PODAJ SWÓJ WEBHOOK DISCORD
-    const webhookURL = 'https://discord.com/api/webhooks/...';
+    const webhookURL = 'https://discord.com/api/webhooks/1430059619056746599/ZveSM1aawolQa6EPMJpPupJaXI6Srk-xWD77gNkjTxyqiOKQPG8dYgFht1ruxO-F4Nwy';
     
     if (!webhookURL || webhookURL.includes('...')) {
       console.warn('Webhook Discord nie jest skonfigurowany');
